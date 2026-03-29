@@ -1,0 +1,15 @@
+﻿__pycache__/
+*.py[cod]
+.idea/
+.vscode/
+
+# 大文件/数据目录：不上传
+basic_data/
+results/
+final/
+*.parquet
+*.zip
+*.7z
+*.pth
+*.pt
+*.ckpt

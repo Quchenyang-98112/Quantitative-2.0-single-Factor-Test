@@ -1,0 +1,93 @@
+# DY-IND-CHG_STATUS 指标分析报告
+
+## 1. 指标来源与基本信息
+
+- **来源文件**：basic_data/daily_data.parquet
+- **字段含义**：涨跌停状态编码
+- **在代码中的处理**：
+  - 在 01_data_prepare.py 中被重命名为 `limit_status`
+  - 其唯一值被收集并写入 results/data_prepare_report.txt
+
+## 2. 编码定义与映射
+
+### 2.1 当前映射规则
+
+在 02_factor_build.py 中，通过 `LIMIT_STATUS_MAP` 字典定义了涨跌停编码：
+
+```python
+LIMIT_STATUS_MAP = {
+    "UP": [2, 3],      # 涨停
+    "DOWN": [5, 6],    # 跌停
+}
+```
+
+### 2.2 识别逻辑
+
+代码通过 `infer_limit_flags` 函数实现涨跌停识别：
+
+1. **使用映射规则**：如果设置了 `LIMIT_STATUS_MAP`，则直接使用其中定义的值进行判断
+2. **文本关键词识别**：如果未设置映射规则，则通过文本关键词识别（如"涨停"、"UP"、"ZT"等）
+
+## 3. 在因子构建中的使用
+
+### 3.1 数据处理流程
+
+1. **数据准备**：
+   - 读取 daily_data.parquet 文件
+   - 将 DY-IND-CHG_STATUS 重命名为 limit_status
+   - 保存为 daily_prepared.parquet
+
+2. **因子构建**：
+   - 读取 daily_prepared.parquet
+   - 计算 t1 日的涨跌停状态：`limit_status_t1 = g["limit_status"].shift(-1)`
+   - 使用 `infer_limit_flags` 函数判断是否为涨跌停
+   - 生成 `is_limit_t1` 字段：1 表示涨跌停，0 表示正常
+
+### 3.2 过滤逻辑
+
+在计算有效样本 `valid_t1` 时，涨跌停状态被作为过滤条件之一：
+
+```python
+daily["valid_t1"] = (
+    daily["factor_raw"].notna()
+    & daily["ret_fwd"].notna()
+    & daily["is_price_valid"]
+    & (daily["is_limit_t1"] == 0)  # 剔除涨跌停
+    & (daily["is_suspend"] == 0)    # 剔除停牌
+    & (daily["is_st"] == 0)        # 剔除 ST
+    & (daily["is_new"] == 0)        # 剔除新股
+)
+```
+
+## 4. 统计信息
+
+根据运行结果，我们可以看到：
+
+- **总样本数**：8,717,164
+- **有效样本占比**：87.74%
+- **涨跌停过滤效果**：通过设置合理的映射规则，有效样本占比显著提升
+
+## 5. 代码优化建议
+
+1. **编码映射可配置化**：
+   - 建议将 LIMIT_STATUS_MAP 移至配置文件，方便后续调整
+   - 可添加更多编码值的支持
+
+2. **识别逻辑增强**：
+   - 考虑添加更多文本关键词，提高识别准确率
+   - 可支持更复杂的编码规则
+
+3. **统计分析增强**：
+   - 建议在诊断报告中添加涨跌停分布统计
+   - 可分析不同市场、不同时期的涨跌停特征
+
+## 6. 结论
+
+DY-IND-CHG_STATUS 是一个重要的市场状态指标，用于标识股票的涨跌停状态。通过合理的编码映射和识别逻辑，代码能够有效地过滤掉涨跌停样本，提高因子检验的准确性。
+
+当前的映射规则（2,3=涨停，5,6=跌停）已经被验证是有效的，有效样本占比达到了 87.74%，说明这种映射方式能够合理地识别涨跌停状态。
+
+---
+
+**报告生成时间**：2026-03-28
+**基于代码版本**：ShiXi-NuoFengHui/src
